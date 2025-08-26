@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1st Release</title>
+    <style>
+        #screen {
+            border: 10px solid #CCC;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            image-rendering: -moz-crisp-edges;
+            width: 400px;
+            height: 400px;
+            display: none;
+        }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <canvas id="screen" height="10" width="10"></canvas>
+    <h1 id=score>Score: 0</h1>
+    <script type="module">
+        import createKeyboardListener from "./keyboard-listener.js"
+        import createGame from "./game.js"
+        import renderScreen from "./render-screen.js"
+
+        const game = createGame()
+
+        const keyboardListener = createKeyboardListener(document)
+
+        const socket = io()
+
+        socket.on("connect", () => {
+            const playerId = socket.id
+            console.log(`> Player connected on Client with id: ${playerId}`)
+
+            const screen = document.getElementById("screen")
+
+            renderScreen(screen, game, requestAnimationFrame, playerId)
+
+            socket.on("disconnect", () => {
+                game.unsubscribe()
+                console.log("> Unsubscribe observers")
+            })
+        })
+
+        socket.on("setup", (state) => {
+            const playerId = socket.id
+            game.setState(state)
+
+            const screen = document.getElementById("screen")
+            const width = game.state.screen.width
+            const height = game.state.screen.height
+            screen.style = `
+                display: block; 
+                height: ${40*height}px; 
+                width: ${40*width}px;`
+            screen.width = width
+            screen.height = height
+
+            keyboardListener.registerPlayerId(playerId)
+            keyboardListener.subscribe(game.movePlayer)
+            keyboardListener.subscribe((command) => {
+                socket.emit("move-player", command)
+            })
+        })
+
+        socket.on("add-player", (command) => {
+            game.addPlayer(command)
+        })
+
+        socket.on("remove-player", (command) => {
+            game.removePlayer(command)
+        })
+
+        socket.on("move-player", (command) => {
+            const playerId = socket.id
+
+            if (playerId !== command.playerId) {
+                game.movePlayer(command)
+            }
+        })
+
+        socket.on("add-fruit", (command) => {
+            game.addFruit(command)
+        })
+
+        socket.on("remove-fruit", (command) => {
+            game.removeFruit(command)
+        })
+
+        const score = document.getElementById("score")
+
+        socket.on("score", (command) => {
+            const playerId = socket.id
+
+            console.log(command.playerId, playerId)
+            if (command.playerId === playerId) {
+                score.innerText = `Score: ${command.score}`
+            }
+        })
+    </script>
+</body>
+</html>
